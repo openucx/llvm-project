@@ -130,6 +130,28 @@ struct FormatStyle {
   /// \endcode
   bool AlignConsecutiveDeclarations;
 
+  /// If ``true``, aligns consecutive struct memebers.
+  ///
+  /// This will align the struct member names of consecutive lines. This
+  /// will result in formattings like
+  /// \code
+  ///   struct foo {
+  ///       int     aaaa;
+  ///       float   b;
+  ///   }
+  /// \endcode
+  bool AlignConsecutiveStructMembers;
+
+  /// If ``true``, aligns pointers instead of names
+  ///
+  /// This will align pointer declarations by the poiter itself instead of the
+  /// variable name. This will result in formatting like:
+  /// \code
+  ///   int     aaaa;
+  ///   float   *b;
+  /// \endcode
+  bool AlignDeclarationByPointer;
+
   /// Different styles for aligning escaped newlines.
   enum EscapedNewlineAlignmentStyle {
     /// Don't align escaped newlines.
@@ -2436,6 +2458,8 @@ struct FormatStyle {
            AlignConsecutiveAssignments == R.AlignConsecutiveAssignments &&
            AlignConsecutiveBitFields == R.AlignConsecutiveBitFields &&
            AlignConsecutiveDeclarations == R.AlignConsecutiveDeclarations &&
+           AlignConsecutiveStructMembers == R.AlignConsecutiveStructMembers &&
+           AlignDeclarationByPointer == R.AlignDeclarationByPointer &&
            AlignEscapedNewlines == R.AlignEscapedNewlines &&
            AlignOperands == R.AlignOperands &&
            AlignTrailingComments == R.AlignTrailingComments &&

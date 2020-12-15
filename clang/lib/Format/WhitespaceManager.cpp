@@ -259,10 +259,20 @@ void WhitespaceManager::calculateLineBreakInformation() {
   }
 }
 
+static unsigned
+FindPrevPointerOrReference(SmallVector<WhitespaceManager::Change, 16> &Changes,
+		                       unsigned i)
+{
+  for (; (i > 0) && (Changes[i - 1].Tok->getType() == TT_PointerOrReference);
+    --i);
+  return i;
+}
+
 // Align a single sequence of tokens, see AlignTokens below.
 template <typename F>
 static void
-AlignTokenSequence(unsigned Start, unsigned End, unsigned Column, F &&Matches,
+AlignTokenSequence(const FormatStyle &Style, unsigned Start, unsigned End,
+                   unsigned Column, F &&Matches,
                    SmallVector<WhitespaceManager::Change, 16> &Changes) {
   bool FoundMatchOnLine = false;
   int Shift = 0;
@@ -309,7 +319,9 @@ AlignTokenSequence(unsigned Start, unsigned End, unsigned Column, F &&Matches,
     // shifted by the same amount
     if (!FoundMatchOnLine && !InsideNestedScope && Matches(Changes[i])) {
       FoundMatchOnLine = true;
-      Shift = Column - Changes[i].StartOfTokenColumn;
+      unsigned AlignIndex = Style.AlignDeclarationByPointer ?
+                            FindPrevPointerOrReference(Changes, i) : i;
+      Shift = Column - Changes[AlignIndex].StartOfTokenColumn;
       Changes[i].Spaces += Shift;
     }
 
@@ -330,6 +342,18 @@ AlignTokenSequence(unsigned Start, unsigned End, unsigned Column, F &&Matches,
     Changes[i].StartOfTokenColumn += Shift;
     if (i + 1 != Changes.size())
       Changes[i + 1].PreviousEndOfTokenColumn += Shift;
+
+    // If PointerAlignment is PAS_Right, keep *s or &s next to the token
+    if ((Style.PointerAlignment == FormatStyle::PAS_Right) && (Shift > 0) &&
+        FoundMatchOnLine) {
+      for (int previous = i - 1;
+           previous >= 0 &&
+           Changes[previous].Tok->getType() == TT_PointerOrReference;
+           previous--) {
+        Changes[previous + 1].Spaces -= Shift;
+        Changes[previous].Spaces += Shift;
+      }
+    }
   }
 }
 
@@ -363,7 +387,7 @@ AlignTokenSequence(unsigned Start, unsigned End, unsigned Column, F &&Matches,
 template <typename F>
 static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
                             SmallVector<WhitespaceManager::Change, 16> &Changes,
-                            unsigned StartAt) {
+                            unsigned StartAt, bool OnlyStructs, bool InStruct) {
   unsigned MinColumn = 0;
   unsigned MaxColumn = UINT_MAX;
 
@@ -385,6 +409,7 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
 
   // Whether a matching token has been found on the current line.
   bool FoundMatchOnLine = false;
+  bool FoundStruct = false;
 
   // Aligns a sequence of matching tokens, on the MinColumn column.
   //
@@ -395,8 +420,8 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
   // containing any matching token to be aligned and located after such token.
   auto AlignCurrentSequence = [&] {
     if (StartOfSequence > 0 && StartOfSequence < EndOfSequence)
-      AlignTokenSequence(StartOfSequence, EndOfSequence, MinColumn, Matches,
-                         Changes);
+      AlignTokenSequence(Style, StartOfSequence, EndOfSequence, MinColumn,
+                         Matches, Changes);
     MinColumn = 0;
     MaxColumn = UINT_MAX;
     StartOfSequence = 0;
@@ -408,26 +433,41 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
     if (Changes[i].indentAndNestingLevel() < IndentAndNestingLevel)
       break;
 
+    if (Changes[i].Tok->isOneOf(tok::kw_struct, tok::kw_union))
+      FoundStruct = true;
+    else if (Changes[i].Tok->is(tok::r_brace))
+      FoundStruct = false;
+
     if (Changes[i].NewlinesBefore != 0) {
       CommasBeforeMatch = 0;
       EndOfSequence = i;
       // If there is a blank line, or if the last line didn't contain any
       // matching token, the sequence ends here.
-      if (Changes[i].NewlinesBefore > 1 || !FoundMatchOnLine)
+      if (Changes[i].NewlinesBefore > 2 ||
+          (Changes[i].NewlinesBefore > 1 && !InStruct) ||
+          (!FoundMatchOnLine && !Changes[i].Tok->is(tok::comment)))
         AlignCurrentSequence();
 
-      FoundMatchOnLine = false;
+      // Don't break matching sequence in case of comment
+      if (!Changes[i].Tok->is(tok::comment))
+         FoundMatchOnLine = false;
     }
 
     if (Changes[i].Tok->is(tok::comma)) {
       ++CommasBeforeMatch;
     } else if (Changes[i].indentAndNestingLevel() > IndentAndNestingLevel) {
       // Call AlignTokens recursively, skipping over this scope block.
-      unsigned StoppedAt = AlignTokens(Style, Matches, Changes, i);
+      unsigned StoppedAt = AlignTokens(Style, Matches, Changes, i, OnlyStructs,
+                                       FoundStruct);
       i = StoppedAt - 1;
       continue;
     }
 
+    // Skip if we want to align only structs, and we're not in a struct now
+    if (OnlyStructs && !InStruct)
+      continue;
+
+    // Don't let comments break the sequence
     if (!Matches(Changes[i]))
       continue;
 
@@ -442,7 +482,10 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
     if (StartOfSequence == 0)
       StartOfSequence = i;
 
-    unsigned ChangeMinColumn = Changes[i].StartOfTokenColumn;
+    unsigned previous = Style.AlignDeclarationByPointer ?
+                        FindPrevPointerOrReference(Changes, i) : i;
+    unsigned ChangeMinColumn = Changes[previous].StartOfTokenColumn;
+
     int LineLengthAfter = Changes[i].TokenLength;
     for (unsigned j = i + 1; j != e && Changes[j].NewlinesBefore == 0; ++j) {
       LineLengthAfter += Changes[j].Spaces;
@@ -613,7 +656,7 @@ void WhitespaceManager::alignConsecutiveAssignments() {
 
         return C.Tok->is(tok::equal);
       },
-      Changes, /*StartAt=*/0);
+      Changes, /*StartAt=*/0, false, false);
 }
 
 void WhitespaceManager::alignConsecutiveBitFields() {
@@ -633,11 +676,12 @@ void WhitespaceManager::alignConsecutiveBitFields() {
 
         return C.Tok->is(TT_BitFieldColon);
       },
-      Changes, /*StartAt=*/0);
+      Changes, /*StartAt=*/0, false, false);
 }
 
 void WhitespaceManager::alignConsecutiveDeclarations() {
-  if (!Style.AlignConsecutiveDeclarations)
+  if (!Style.AlignConsecutiveDeclarations &&
+      !Style.AlignConsecutiveStructMembers)
     return;
 
   // FIXME: Currently we don't handle properly the PointerAlignment: Right
@@ -667,7 +711,7 @@ void WhitespaceManager::alignConsecutiveDeclarations() {
         }
         return true;
       },
-      Changes, /*StartAt=*/0);
+      Changes, /*StartAt=*/0, !Style.AlignConsecutiveDeclarations, false);
 }
 
 void WhitespaceManager::alignChainedConditionals() {
@@ -682,7 +726,7 @@ void WhitespaceManager::alignChainedConditionals() {
                    (C.Tok->Next->FakeLParens.size() == 0 ||
                     C.Tok->Next->FakeLParens.back() != prec::Conditional)));
         },
-        Changes, /*StartAt=*/0);
+        Changes, /*StartAt=*/0, false, false);
   } else {
     static auto AlignWrappedOperand = [](Change const &C) {
       auto Previous = C.Tok->getPreviousNonComment(); // Previous;
@@ -710,7 +754,7 @@ void WhitespaceManager::alignChainedConditionals() {
                   !(&C + 1)->IsTrailingComment) ||
                  AlignWrappedOperand(C);
         },
-        Changes, /*StartAt=*/0);
+        Changes, /*StartAt=*/0, false, false);
   }
 }
 
