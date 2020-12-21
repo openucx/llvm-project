@@ -380,11 +380,24 @@ FindPrevPointerOrReference(SmallVector<WhitespaceManager::Change, 16> &Changes,
   return i;
 }
 
+enum {
+    // Control flags
+    AlignTokensOnlyStructEnumUnion = 1 << 0, /* process only struct/union/enum */
+    AlignTokensSplitByStatement    = 1 << 1, /* in struct/union/other: use ; to
+                                                consider same statement
+                                                in enum: use , */
+    AlignTokensRight               = 1 << 2, /* align on right side */
+
+    // State flags
+    AlignTokenInStructEnumUnion    = 1 << 0, /* in struct/union/enum */
+};
+
 // Align a single sequence of tokens, see AlignTokens below.
 template <typename F>
 static void
 AlignTokenSequence(const FormatStyle &Style, unsigned Start, unsigned End,
-                   unsigned Column, F &&Matches,
+                   unsigned Column, F &&Matches, tok::TokenKind SepTok,
+                   unsigned Flags,
                    SmallVector<WhitespaceManager::Change, 16> &Changes) {
   bool FoundMatchOnLine = false;
   int Shift = 0;
@@ -406,6 +419,9 @@ AlignTokenSequence(const FormatStyle &Style, unsigned Start, unsigned End,
   LOG << "AlignTokenSequence Start=" << Start << " End=" << End
       << " Column=" << Column;
   LogScope l;
+  unsigned StatementIndex = 0;
+  unsigned LastMatchStatement = 0;
+  unsigned MatchTokenLength = 0;
   for (unsigned i = Start; i != End; ++i) {
     if (ScopeStack.size() != 0 &&
         Changes[i].indentAndNestingLevel() <
@@ -424,9 +440,17 @@ AlignTokenSequence(const FormatStyle &Style, unsigned Start, unsigned End,
 
     bool InsideNestedScope = ScopeStack.size() != 0;
 
-    if (Changes[i].NewlinesBefore > 0 && !InsideNestedScope) {
-      Shift = 0;
-      FoundMatchOnLine = false;
+    if ((SepTok == tok::unknown) || Changes[i].Tok->is(SepTok))
+      ++StatementIndex;
+
+    if (Changes[i].NewlinesBefore > 0) {
+      if (Changes[i].IsAligned && (LastMatchStatement == StatementIndex)) {
+        Changes[i].Spaces += Shift;
+        FoundMatchOnLine = true;
+      } else if (!InsideNestedScope) {
+        Shift = 0;
+        FoundMatchOnLine = false;
+      }
     }
 
     // If this is the first matching token to be aligned, remember by how many
@@ -434,16 +458,23 @@ AlignTokenSequence(const FormatStyle &Style, unsigned Start, unsigned End,
     // shifted by the same amount
     if (!FoundMatchOnLine && !InsideNestedScope && Matches(Changes[i])) {
       FoundMatchOnLine = true;
+      LastMatchStatement = StatementIndex;
+      MatchTokenLength = Changes[i].TokenLength;
       unsigned AlignIndex = Style.AlignDeclarationByPointer ?
                             FindPrevPointerOrReference(Changes, i) : i;
       Shift = Column - Changes[AlignIndex].StartOfTokenColumn;
+      if (Flags & AlignTokensRight)
+        Shift -= MatchTokenLength;
       Changes[i].Spaces += Shift;
     }
 
     LOG << "Tok[" << i << "]   " << Changes[i].Tok->TokenText.str()
         << "   Column=" << Changes[i].StartOfTokenColumn
         << " Shift="  << Shift
-        << " Spaces=" << Changes[i].Spaces;
+        << " InsideNestedScope=" << InsideNestedScope
+        << " Spaces=" << Changes[i].Spaces
+        << " StatementIndex=" << StatementIndex
+        << " LastMatchStatement=" << LastMatchStatement;
 
     // This is for function parameters that are split across multiple lines,
     // as mentioned in the ScopeStack comment.
@@ -465,7 +496,7 @@ AlignTokenSequence(const FormatStyle &Style, unsigned Start, unsigned End,
 
     // If PointerAlignment is PAS_Right, keep *s or &s next to the token
     if ((Style.PointerAlignment == FormatStyle::PAS_Right) && (Shift > 0) &&
-        FoundMatchOnLine) {
+        Matches(Changes[i])) {
       for (int previous = i - 1;
            previous >= 0 &&
            Changes[previous].Tok->getType() == TT_PointerOrReference;
@@ -508,7 +539,7 @@ AlignTokenSequence(const FormatStyle &Style, unsigned Start, unsigned End,
 template <typename F>
 static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
                             SmallVector<WhitespaceManager::Change, 16> &Changes,
-                            unsigned StartAt, bool OnlyStructs, bool InStruct) {
+                            unsigned StartAt, unsigned Flags, unsigned State = 0) {
   unsigned MinColumn = 0;
   unsigned MaxColumn = UINT_MAX;
 
@@ -530,7 +561,11 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
 
   // Whether a matching token has been found on the current line.
   bool FoundMatchOnLine = false;
-  bool FoundStruct = false;
+  unsigned NestedState = 0;
+  tok::TokenKind SepTok = (Flags & AlignTokensSplitByStatement) ?
+                          ((State & AlignTokenInStructEnumUnion) ?
+                           tok::comma : tok::semi) :
+                          tok::unknown;
 
   // Aligns a sequence of matching tokens, on the MinColumn column.
   //
@@ -543,31 +578,42 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
     LOG << "AlignCurrentSequence StartOfSequence=" << StartOfSequence
         << " EndOfSequence=" << EndOfSequence << " MinColumn=" << MinColumn;
     LogScope l;
-    if (StartOfSequence > 0 && StartOfSequence < EndOfSequence)
+    if (StartOfSequence > 0 && StartOfSequence < EndOfSequence) {
       AlignTokenSequence(Style, StartOfSequence, EndOfSequence, MinColumn,
-                         Matches, Changes);
+                         Matches, SepTok, Flags, Changes);
+    }
     MinColumn = 0;
     MaxColumn = UINT_MAX;
     StartOfSequence = 0;
     EndOfSequence = 0;
   };
 
-  LOG << "AlignTokens StartAt=" << StartAt << " Changes.size()=" << Changes.size();
+  LOG << "AlignTokens StartAt=" << StartAt
+      << " Changes.size()=" << Changes.size()
+      << " Flags=" << Flags << " State=" << State;
   LogScope l;
 
   unsigned i = StartAt;
+  unsigned StatementIndex = 0;
+  unsigned LastMatchStatement = 0;
   for (unsigned e = Changes.size(); i != e; ++i) {
     if (Changes[i].indentAndNestingLevel() < IndentAndNestingLevel)
       break;
 
-    if (Changes[i].Tok->isOneOf(tok::kw_struct, tok::kw_union))
-      FoundStruct = true;
-    else if (Changes[i].Tok->is(tok::r_brace))
-      FoundStruct = false;
+    if (Changes[i].Tok->isOneOf(tok::kw_struct, tok::kw_union, tok::kw_enum) ||
+       // Struct initializer brace
+       (Changes[i].Tok->is(tok::equal) && (i + 1 < e) &&
+        Changes[i + 1].Tok->is(tok::l_brace)))
+      NestedState |= AlignTokenInStructEnumUnion;
+    else if ((SepTok == tok::unknown) || Changes[i].Tok->is(SepTok))
+      ++StatementIndex;
 
     LOG << "Tok[" << i << "] " << Changes[i].Tok->TokenText.str() << "  "
+        << " StatementIndex=" << StatementIndex
+        << " LastMatchStatement=" << LastMatchStatement
         << " Spaces=" << Changes[i].Spaces
         << " NewLinesBefore=" << Changes[i].NewlinesBefore
+        << " NestedState=" << NestedState
         << " FoundMatchOnLine=" << FoundMatchOnLine;
 
     if (Changes[i].NewlinesBefore != 0) {
@@ -575,15 +621,21 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
       EndOfSequence = i;
       // If there is a blank line, or if the last line didn't contain any
       // matching token, the sequence ends here.
-      if (Changes[i].NewlinesBefore > 2 ||
-          (Changes[i].NewlinesBefore > 1 && !InStruct) ||
+      if (// More than 2 blank lines in general code
+          Changes[i].NewlinesBefore > 2 ||
+          // More than one blank line in struct/enum/union
+          (Changes[i].NewlinesBefore > 1 &&
+           !(State & AlignTokenInStructEnumUnion)) ||
+          // Line without match which is not a comment
           (!FoundMatchOnLine && !Changes[i].Tok->is(tok::comment))) {
         LOG << "Call AlignCurrentSequence";
         AlignCurrentSequence();
       }
 
-      // Don't break matching sequence in case of comment
-      if (!Changes[i].Tok->is(tok::comment))
+      // Don't break matching sequence in case of comment or we are continuing
+      // the statement from previous line according to SepTok separator
+      if (!Changes[i].Tok->is(tok::comment) &&
+          (StatementIndex > LastMatchStatement))
          FoundMatchOnLine = false;
     }
 
@@ -592,15 +644,17 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
     } else if (Changes[i].indentAndNestingLevel() > IndentAndNestingLevel) {
       // Call AlignTokens recursively, skipping over this scope block.
       LOG << "Call AlignTokens recursively";
-      unsigned StoppedAt = AlignTokens(Style, Matches, Changes, i, OnlyStructs,
-                                       FoundStruct);
+      unsigned StoppedAt = AlignTokens(Style, Matches, Changes, i, Flags,
+                                       NestedState);
       i = StoppedAt - 1;
+      NestedState = 0;
       continue;
     }
 
     // Skip if we want to align only structs, and we're not in a struct now
-    if (OnlyStructs && !InStruct)
-      continue;
+    if ((Flags & AlignTokensOnlyStructEnumUnion) &&
+        !(State & AlignTokenInStructEnumUnion))
+        continue;
 
     // Don't let comments break the sequence
     if (!Matches(Changes[i]))
@@ -613,6 +667,7 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
 
     CommasBeforeLastMatch = CommasBeforeMatch;
     FoundMatchOnLine = true;
+    LastMatchStatement = StatementIndex;
 
     if (StartOfSequence == 0)
       StartOfSequence = i;
@@ -620,6 +675,8 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
     unsigned previous = Style.AlignDeclarationByPointer ?
                         FindPrevPointerOrReference(Changes, i) : i;
     unsigned ChangeMinColumn = Changes[previous].StartOfTokenColumn;
+    if (Flags & AlignTokensRight)
+      ChangeMinColumn += Changes[i].TokenLength;
 
     int LineLengthAfter = Changes[i].TokenLength;
     for (unsigned j = i + 1; j != e && Changes[j].NewlinesBefore == 0; ++j) {
@@ -789,9 +846,14 @@ void WhitespaceManager::alignConsecutiveAssignments() {
         if (&C != &Changes.back() && (&C + 1)->NewlinesBefore > 0)
           return false;
 
-        return C.Tok->is(tok::equal);
+        return C.Tok->isOneOf(tok::equal, tok::plusequal, tok::minusequal,
+                              tok::starequal, tok::slashequal,
+                              tok::percentequal, tok::ampequal,
+                              tok::pipeequal, tok::caretequal,
+                              tok::greatergreaterequal, tok::lesslessequal);
+
       },
-      Changes, /*StartAt=*/0, false, false);
+      Changes, /*StartAt=*/0, AlignTokensSplitByStatement | AlignTokensRight);
 }
 
 void WhitespaceManager::alignConsecutiveBitFields() {
@@ -811,7 +873,7 @@ void WhitespaceManager::alignConsecutiveBitFields() {
 
         return C.Tok->is(TT_BitFieldColon);
       },
-      Changes, /*StartAt=*/0, false, false);
+      Changes, /*StartAt=*/0, 0);
 }
 
 void WhitespaceManager::alignConsecutiveDeclarations() {
@@ -846,7 +908,8 @@ void WhitespaceManager::alignConsecutiveDeclarations() {
         }
         return true;
       },
-      Changes, /*StartAt=*/0, !Style.AlignConsecutiveDeclarations, false);
+      Changes, /*StartAt=*/0,
+      Style.AlignConsecutiveDeclarations ? 0 : AlignTokensOnlyStructEnumUnion);
 }
 
 void WhitespaceManager::alignChainedConditionals() {
@@ -861,7 +924,7 @@ void WhitespaceManager::alignChainedConditionals() {
                    (C.Tok->Next->FakeLParens.size() == 0 ||
                     C.Tok->Next->FakeLParens.back() != prec::Conditional)));
         },
-        Changes, /*StartAt=*/0, false, false);
+        Changes, /*StartAt=*/0, 0);
   } else {
     static auto AlignWrappedOperand = [](Change const &C) {
       auto Previous = C.Tok->getPreviousNonComment(); // Previous;
@@ -889,7 +952,7 @@ void WhitespaceManager::alignChainedConditionals() {
                   !(&C + 1)->IsTrailingComment) ||
                  AlignWrappedOperand(C);
         },
-        Changes, /*StartAt=*/0, false, false);
+        Changes, /*StartAt=*/0, 0);
   }
 }
 
