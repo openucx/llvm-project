@@ -1395,6 +1395,21 @@ struct FormatStyle {
   /// \endcode
   bool Cpp11BracedListStyle;
 
+  /// If true, adds line break after C++11 braced lists.
+  /// \code
+  ///   false:
+  ///   struct A a_var = {
+  ///       AAAAAAAA,
+  ///       BBBBBBBB};
+  ///
+  ///   false:
+  ///   struct A a_var = {
+  ///       AAAAAAAA,
+  ///       BBBBBBBB
+  //    };
+  /// \endcode
+  bool Cpp11BracedListLineBreak;
+
   /// \brief Analyze the formatted file for the most used line ending (``\r\n``
   /// or ``\n``). ``UseCRLF`` is only used as a fallback if none can be derived.
   bool DeriveLineEnding;
@@ -2515,6 +2530,7 @@ struct FormatStyle {
                R.ConstructorInitializerIndentWidth &&
            ContinuationIndentWidth == R.ContinuationIndentWidth &&
            Cpp11BracedListStyle == R.Cpp11BracedListStyle &&
+           Cpp11BracedListLineBreak == R.Cpp11BracedListLineBreak &&
            DeriveLineEnding == R.DeriveLineEnding &&
            DerivePointerAlignment == R.DerivePointerAlignment &&
            DisableFormat == R.DisableFormat &&

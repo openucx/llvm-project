@@ -654,7 +654,8 @@ public:
     return is(TT_ArrayInitializerLSquare) || is(TT_ProtoExtensionLSquare) ||
            (is(tok::l_brace) &&
             (getBlockKind() == BK_Block || is(TT_DictLiteral) ||
-             (!Style.Cpp11BracedListStyle && NestingLevel == 0))) ||
+             ((!Style.Cpp11BracedListStyle || Style.Cpp11BracedListLineBreak) &&
+              NestingLevel == 0))) ||
            (is(tok::less) && (Style.Language == FormatStyle::LK_Proto ||
                               Style.Language == FormatStyle::LK_TextProto));
   }
