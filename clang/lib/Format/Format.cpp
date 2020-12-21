@@ -646,6 +646,7 @@ template <> struct MappingTraits<FormatStyle> {
     IO.mapOptional("UseTab", Style.UseTab);
     IO.mapOptional("WhitespaceSensitiveMacros",
                    Style.WhitespaceSensitiveMacros);
+    IO.mapOptional("LogFile", Style.LogFile);
   }
 };
 
@@ -994,6 +995,7 @@ FormatStyle getLLVMStyle(FormatStyle::LanguageKind Language) {
   LLVMStyle.WhitespaceSensitiveMacros.push_back("BOOST_PP_STRINGIZE");
   LLVMStyle.WhitespaceSensitiveMacros.push_back("NS_SWIFT_NAME");
   LLVMStyle.WhitespaceSensitiveMacros.push_back("CF_SWIFT_NAME");
+  LLVMStyle.LogFile = "";
 
   // Defaults that differ when not C++.
   if (Language == FormatStyle::LK_TableGen) {

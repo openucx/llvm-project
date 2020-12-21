@@ -14,8 +14,80 @@
 #include "WhitespaceManager.h"
 #include "llvm/ADT/STLExtras.h"
 
+#include <fstream>
+
 namespace clang {
 namespace format {
+
+class Logger {
+public:
+    static Logger& Get() {
+        static Logger instance;
+        return instance;
+    }
+
+    void Init(const std::string &NewFileName) {
+        if (FileName != NewFileName) {
+            LogStream.open(NewFileName.c_str());
+            FileName = NewFileName;
+        }
+    }
+
+    int Indent(int delta = 0) {
+        return CurrentIndent += delta;
+    }
+
+private:
+    Logger() : CurrentIndent(0) {}
+
+    friend class LogLine;
+    std::string   FileName;
+    std::ofstream LogStream;
+    int           CurrentIndent;
+};
+
+class LogLine {
+public:
+    LogLine(const char *File, int Line) : Log(Logger::Get()) {
+        if (!Log.FileName.empty()) {
+            Log.LogStream << "[CLANG] " << basename(File) << ":" << Line << "   ";
+            for (int i = 0, e = Log.Indent(); i < e; ++i) {
+                Log.LogStream << " ";
+            }
+        }
+    }
+
+    ~LogLine() {
+        if (!Log.FileName.empty()) {
+            Log.LogStream << std::endl;
+        }
+    }
+
+    template<typename T>
+    const LogLine& operator<<(const T &t) const {
+        if (!Log.FileName.empty()) {
+            Log.LogStream << t;
+        }
+        return *this;
+    }
+
+private:
+    Logger &Log;
+};
+
+class LogScope {
+public:
+    LogScope() {
+        Logger::Get().Indent(2);
+    }
+
+    ~LogScope() {
+        Logger::Get().Indent(-2);
+    }
+};
+
+#define LOG LogLine(__FILE__, __LINE__)
+
 
 bool WhitespaceManager::Change::IsBeforeInFile::operator()(
     const Change &C1, const Change &C2) const {
@@ -91,15 +163,55 @@ const tooling::Replacements &WhitespaceManager::generateReplacements() {
   if (Changes.empty())
     return Replaces;
 
+  Logger::Get().Init(Style.LogFile);
   llvm::sort(Changes, Change::IsBeforeInFile(SourceMgr));
+  {
+      LogScope l;
+      for (unsigned i = 0, e = Changes.size(); i < e; ++i) {
+          LOG << i << "  ["
+              << (Changes[i].IsInsideToken ? 'i' : '-')
+              << "/N=" << Changes[i].Tok->NestingLevel
+              << "/NLB=" << Changes[i].NewlinesBefore
+              << "/STC=" << Changes[i].StartOfTokenColumn
+              << "/S=" << Changes[i].Spaces
+              << "/T=" << Changes[i].Tok->getType()
+              << "]   "
+              << Changes[i].Tok->TokenText.str();
+      }
+  }
+
+  LOG << "====";
+  LOG << "calculateLineBreakInformation";
   calculateLineBreakInformation();
+
+  LOG << "====";
+  LOG << "alignConsecutiveMacros";
   alignConsecutiveMacros();
+
+  LOG << "====";
+  LOG << "alignConsecutiveDeclarations";
   alignConsecutiveDeclarations();
+
+  LOG << "====";
+  LOG << "alignConsecutiveBitFields";
   alignConsecutiveBitFields();
+
+  LOG << "====";
+  LOG << "alignConsecutiveAssignments";
   alignConsecutiveAssignments();
+
+  LOG << "====";
+  LOG << "alignChainedConditionals";
   alignChainedConditionals();
+
+  LOG << "====";
+  LOG << "alignTrailingComments";
   alignTrailingComments();
+
+  LOG << "====";
+  LOG << "alignEscapedNewlines";
   alignEscapedNewlines();
+
   generateChanges();
 
   return Replaces;
@@ -291,6 +403,9 @@ AlignTokenSequence(const FormatStyle &Style, unsigned Start, unsigned End,
   // Special handling is required for 'nested' ternary operators.
   SmallVector<unsigned, 16> ScopeStack;
 
+  LOG << "AlignTokenSequence Start=" << Start << " End=" << End
+      << " Column=" << Column;
+  LogScope l;
   for (unsigned i = Start; i != End; ++i) {
     if (ScopeStack.size() != 0 &&
         Changes[i].indentAndNestingLevel() <
@@ -325,6 +440,11 @@ AlignTokenSequence(const FormatStyle &Style, unsigned Start, unsigned End,
       Changes[i].Spaces += Shift;
     }
 
+    LOG << "Tok[" << i << "]   " << Changes[i].Tok->TokenText.str()
+        << "   Column=" << Changes[i].StartOfTokenColumn
+        << " Shift="  << Shift
+        << " Spaces=" << Changes[i].Spaces;
+
     // This is for function parameters that are split across multiple lines,
     // as mentioned in the ScopeStack comment.
     if (InsideNestedScope && Changes[i].NewlinesBefore > 0) {
@@ -350,6 +470,7 @@ AlignTokenSequence(const FormatStyle &Style, unsigned Start, unsigned End,
            previous >= 0 &&
            Changes[previous].Tok->getType() == TT_PointerOrReference;
            previous--) {
+        LOG << "Shift=" << Shift << " i=" << i << " previous=" << previous;
         Changes[previous + 1].Spaces -= Shift;
         Changes[previous].Spaces += Shift;
       }
@@ -419,6 +540,9 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
   // We need to adjust the StartOfTokenColumn of each Change that is on a line
   // containing any matching token to be aligned and located after such token.
   auto AlignCurrentSequence = [&] {
+    LOG << "AlignCurrentSequence StartOfSequence=" << StartOfSequence
+        << " EndOfSequence=" << EndOfSequence << " MinColumn=" << MinColumn;
+    LogScope l;
     if (StartOfSequence > 0 && StartOfSequence < EndOfSequence)
       AlignTokenSequence(Style, StartOfSequence, EndOfSequence, MinColumn,
                          Matches, Changes);
@@ -427,6 +551,9 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
     StartOfSequence = 0;
     EndOfSequence = 0;
   };
+
+  LOG << "AlignTokens StartAt=" << StartAt << " Changes.size()=" << Changes.size();
+  LogScope l;
 
   unsigned i = StartAt;
   for (unsigned e = Changes.size(); i != e; ++i) {
@@ -438,6 +565,11 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
     else if (Changes[i].Tok->is(tok::r_brace))
       FoundStruct = false;
 
+    LOG << "Tok[" << i << "] " << Changes[i].Tok->TokenText.str() << "  "
+        << " Spaces=" << Changes[i].Spaces
+        << " NewLinesBefore=" << Changes[i].NewlinesBefore
+        << " FoundMatchOnLine=" << FoundMatchOnLine;
+
     if (Changes[i].NewlinesBefore != 0) {
       CommasBeforeMatch = 0;
       EndOfSequence = i;
@@ -445,8 +577,10 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
       // matching token, the sequence ends here.
       if (Changes[i].NewlinesBefore > 2 ||
           (Changes[i].NewlinesBefore > 1 && !InStruct) ||
-          (!FoundMatchOnLine && !Changes[i].Tok->is(tok::comment)))
+          (!FoundMatchOnLine && !Changes[i].Tok->is(tok::comment))) {
+        LOG << "Call AlignCurrentSequence";
         AlignCurrentSequence();
+      }
 
       // Don't break matching sequence in case of comment
       if (!Changes[i].Tok->is(tok::comment))
@@ -457,6 +591,7 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
       ++CommasBeforeMatch;
     } else if (Changes[i].indentAndNestingLevel() > IndentAndNestingLevel) {
       // Call AlignTokens recursively, skipping over this scope block.
+      LOG << "Call AlignTokens recursively";
       unsigned StoppedAt = AlignTokens(Style, Matches, Changes, i, OnlyStructs,
                                        FoundStruct);
       i = StoppedAt - 1;
