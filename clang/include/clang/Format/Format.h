@@ -158,10 +158,20 @@ struct FormatStyle {
     /// \code
     ///   #define A \
     ///     int aaaa; \
+    ///   \
     ///     int b; \
     ///     int dddddddddd;
     /// \endcode
     ENAS_DontAlign,
+    /// Don't align escaped newlines.
+    /// \code
+    ///   #define A \
+    ///     int aaaa; \
+    ///     \
+    ///     int b; \
+    ///     int dddddddddd;
+    /// \endcode
+    ENAS_Indent,
     /// Align escaped newlines as far left as possible.
     /// \code
     ///   true:

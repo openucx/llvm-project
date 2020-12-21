@@ -313,6 +313,7 @@ struct ScalarEnumerationTraits<FormatStyle::EscapedNewlineAlignmentStyle> {
   static void enumeration(IO &IO,
                           FormatStyle::EscapedNewlineAlignmentStyle &Value) {
     IO.enumCase(Value, "DontAlign", FormatStyle::ENAS_DontAlign);
+    IO.enumCase(Value, "Indent", FormatStyle::ENAS_Indent);
     IO.enumCase(Value, "Left", FormatStyle::ENAS_Left);
     IO.enumCase(Value, "Right", FormatStyle::ENAS_Right);
 

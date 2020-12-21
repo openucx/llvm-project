@@ -1019,11 +1019,16 @@ void WhitespaceManager::alignEscapedNewlines() {
 
 void WhitespaceManager::alignEscapedNewlines(unsigned Start, unsigned End,
                                              unsigned Column) {
+  LOG << "alignEscapedNewlines Start=" << Start << " End=" << End
+      << " Column=" << Column;
   for (unsigned i = Start; i < End; ++i) {
     Change &C = Changes[i];
     if (C.NewlinesBefore > 0) {
       assert(C.ContinuesPPDirective);
-      if (C.PreviousEndOfTokenColumn + 1 > Column)
+      if (Style.AlignEscapedNewlines == FormatStyle::ENAS_Indent)
+        C.EscapedNewlineColumn = std::min(Style.IndentWidth * C.Tok->IndentLevel,
+                                          C.PreviousEndOfTokenColumn) + 1;
+      else if (C.PreviousEndOfTokenColumn + 1 > Column)
         C.EscapedNewlineColumn = 0;
       else
         C.EscapedNewlineColumn = Column;
