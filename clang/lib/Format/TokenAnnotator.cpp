@@ -2887,6 +2887,15 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
          Style.SpaceAroundPointerQualifiers == FormatStyle::SAPQ_Both) &&
         (Left.is(TT_AttributeParen) || Left.canBePointerOrReferenceQualifier()))
       return true;
+    // Don't add space if the next token closes a scope
+    if (Style.PointerAlignment != FormatStyle::PAS_Left) {
+      FormatToken *NextToken = Right.Next;
+      while (NextToken != NULL && NextToken->is(TT_PointerOrReference))
+        NextToken = NextToken->Next;
+      if (NextToken == NULL || NextToken->closesScope() ||
+          NextToken->isOneOf(tok::comma, tok::semi))
+        return false;
+    }
     return (Left.Tok.isLiteral() ||
             (!Left.isOneOf(TT_PointerOrReference, tok::l_paren) &&
              (Style.PointerAlignment != FormatStyle::PAS_Left ||
