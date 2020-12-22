@@ -2694,8 +2694,8 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     //   aaaaaaa
     //       .aaaaaaaaa.bbbbbbbb(cccccccc);
     return !Right.NextOperator || !Right.NextOperator->Previous->closesScope()
-               ? 150
-               : 35;
+               ? Style.PenaltyBreakLastMemberAccess
+               : Style.PenaltyBreakMemberAccess;
   }
 
   if (Right.is(TT_TrailingAnnotation) &&

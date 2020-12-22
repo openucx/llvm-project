@@ -2002,6 +2002,12 @@ struct FormatStyle {
   /// line.
   unsigned PenaltyReturnTypeOnItsOwnLine;
 
+  /// Penalty for breaking after ./->
+  unsigned PenaltyBreakMemberAccess;
+
+  /// Penalty for breaking after last ./-> in a sequence of member accesses
+  unsigned PenaltyBreakLastMemberAccess;
+
   /// Penalty for each character of whitespace indentation
   /// (counted relative to leading non-whitespace column).
   unsigned PenaltyIndentedWhitespace;
