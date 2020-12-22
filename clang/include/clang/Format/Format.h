@@ -305,6 +305,19 @@ struct FormatStyle {
   /// \endcode
   bool AllowShortEnumsOnASingleLine;
 
+  /// Allow short structs on a single line.
+  /// \code
+  ///   true:
+  ///   struct S _s = { A, B };
+  ///
+  ///   false:
+  ///   struct S _s = {
+  ///     .a = A,
+  ///     .b = B
+  ///   };
+  /// \endcode
+  bool AllowDesignatedInitializersOnASingleLine;
+
   /// Different styles for merging short blocks containing at most one
   /// statement.
   enum ShortBlockStyle {
@@ -2497,6 +2510,7 @@ struct FormatStyle {
            AllowAllParametersOfDeclarationOnNextLine ==
                R.AllowAllParametersOfDeclarationOnNextLine &&
            AllowShortEnumsOnASingleLine == R.AllowShortEnumsOnASingleLine &&
+           AllowDesignatedInitializersOnASingleLine == R.AllowDesignatedInitializersOnASingleLine &&
            AllowShortBlocksOnASingleLine == R.AllowShortBlocksOnASingleLine &&
            AllowShortCaseLabelsOnASingleLine ==
                R.AllowShortCaseLabelsOnASingleLine &&

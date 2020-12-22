@@ -466,6 +466,8 @@ template <> struct MappingTraits<FormatStyle> {
                    Style.AllowAllParametersOfDeclarationOnNextLine);
     IO.mapOptional("AllowShortEnumsOnASingleLine",
                    Style.AllowShortEnumsOnASingleLine);
+    IO.mapOptional("AllowDesignatedInitializersOnASingleLine",
+                   Style.AllowDesignatedInitializersOnASingleLine);
     IO.mapOptional("AllowShortBlocksOnASingleLine",
                    Style.AllowShortBlocksOnASingleLine);
     IO.mapOptional("AllowShortCaseLabelsOnASingleLine",
@@ -871,6 +873,7 @@ FormatStyle getLLVMStyle(FormatStyle::LanguageKind Language) {
   LLVMStyle.AllowAllConstructorInitializersOnNextLine = true;
   LLVMStyle.AllowAllParametersOfDeclarationOnNextLine = true;
   LLVMStyle.AllowShortEnumsOnASingleLine = true;
+  LLVMStyle.AllowDesignatedInitializersOnASingleLine = true;
   LLVMStyle.AllowShortFunctionsOnASingleLine = FormatStyle::SFS_All;
   LLVMStyle.AllowShortBlocksOnASingleLine = FormatStyle::SBS_Never;
   LLVMStyle.AllowShortCaseLabelsOnASingleLine = false;

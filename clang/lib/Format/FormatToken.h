@@ -97,6 +97,7 @@ namespace format {
   TYPE(SelectorName)                                                           \
   TYPE(StartOfName)                                                            \
   TYPE(StatementMacro)                                                         \
+  TYPE(StructInitializerComma)                                                 \
   TYPE(StructuredBindingLSquare)                                               \
   TYPE(TemplateCloser)                                                         \
   TYPE(TemplateOpener)                                                         \

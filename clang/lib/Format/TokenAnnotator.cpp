@@ -1087,7 +1087,9 @@ private:
       parseTemplateDeclaration();
       break;
     case tok::comma:
-      if (Contexts.back().InCtorInitializer)
+      if (Contexts.back().InStructInitializer)
+        Tok->setType(TT_StructInitializerComma);
+      else if (Contexts.back().InCtorInitializer)
         Tok->setType(TT_CtorInitializerComma);
       else if (Contexts.back().InInheritanceList)
         Tok->setType(TT_InheritanceComma);
@@ -1407,6 +1409,7 @@ private:
     bool CanBeExpression = true;
     bool InTemplateArgument = false;
     bool InCtorInitializer = false;
+    bool InStructInitializer = false;
     bool InInheritanceList = false;
     bool CaretFound = false;
     bool IsForEachMacro = false;
@@ -1472,6 +1475,9 @@ private:
                Current.Previous->is(TT_CtorInitializerColon)) {
       Contexts.back().IsExpression = true;
       Contexts.back().InCtorInitializer = true;
+    } else if (Current.Previous &&
+               Current.Previous->is(TT_DesignatedInitializerPeriod)) {
+      Contexts.back().InStructInitializer = true;
     } else if (Current.Previous && Current.Previous->is(TT_InheritanceColon)) {
       Contexts.back().InInheritanceList = true;
     } else if (Current.isOneOf(tok::r_paren, tok::greater, tok::comma)) {
@@ -3646,13 +3652,19 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
   if ((Right.Previous->is(tok::l_brace) ||
        (Right.Previous->is(tok::less) && Right.Previous->Previous &&
         Right.Previous->Previous->is(tok::equal))) &&
-      Right.NestingLevel == 1 && Style.Language == FormatStyle::LK_Proto) {
+      Right.NestingLevel == 1 &&
+      (Style.Language == FormatStyle::LK_Proto ||
+       (Right.is(TT_DesignatedInitializerPeriod) &&
+        !Style.AllowDesignatedInitializersOnASingleLine))) {
     // Don't put enums or option definitions onto single lines in protocol
     // buffers.
     return true;
   }
   if (Right.is(TT_InlineASMBrace))
     return Right.HasUnescapedNewline;
+
+  if (Left.is(TT_StructInitializerComma))
+    return !Style.AllowDesignatedInitializersOnASingleLine;
 
   auto ShortLambdaOption = Style.AllowShortLambdasOnASingleLine;
   if (Style.BraceWrapping.BeforeLambdaBody &&
