@@ -590,7 +590,7 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
 
   LOG << "AlignTokens StartAt=" << StartAt
       << " Changes.size()=" << Changes.size()
-      << " Flags=" << Flags << " State=" << State;
+      << " Flags=" << Flags << " State=" << State << " SepTok=" << SepTok;
   LogScope l;
 
   unsigned i = StartAt;
@@ -600,12 +600,7 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
     if (Changes[i].indentAndNestingLevel() < IndentAndNestingLevel)
       break;
 
-    if (Changes[i].Tok->isOneOf(tok::kw_struct, tok::kw_union, tok::kw_enum) ||
-       // Struct initializer brace
-       (Changes[i].Tok->is(tok::equal) && (i + 1 < e) &&
-        Changes[i + 1].Tok->is(tok::l_brace)))
-      NestedState |= AlignTokenInStructEnumUnion;
-    else if ((SepTok == tok::unknown) || Changes[i].Tok->is(SepTok))
+    if ((SepTok == tok::unknown) || Changes[i].Tok->is(SepTok))
       ++StatementIndex;
 
     LOG << "Tok[" << i << "] " << Changes[i].Tok->TokenText.str() << "  "
@@ -650,6 +645,16 @@ static unsigned AlignTokens(const FormatStyle &Style, F &&Matches,
       NestedState = 0;
       continue;
     }
+
+    // After making sure it's not nested scope, update the current state of
+    // whether we're inside a struct/enum/union
+    if (Changes[i].Tok->isOneOf(tok::kw_struct, tok::kw_union, tok::kw_enum) ||
+       // Struct initializer brace
+       (Changes[i].Tok->is(tok::equal) && (i + 1 < e) &&
+        Changes[i + 1].Tok->is(tok::l_brace)))
+      NestedState |= AlignTokenInStructEnumUnion;
+    else if (Changes[i].Tok->is(tok::semi))
+      NestedState = 0;
 
     // Skip if we want to align only structs, and we're not in a struct now
     if ((Flags & AlignTokensOnlyStructEnumUnion) &&
