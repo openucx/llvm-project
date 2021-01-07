@@ -163,7 +163,7 @@ struct FormatStyle {
     ///     int dddddddddd;
     /// \endcode
     ENAS_DontAlign,
-    /// Don't align escaped newlines.
+    /// Indent escaped newlines.
     /// \code
     ///   #define A \
     ///     int aaaa; \
@@ -2598,6 +2598,8 @@ struct FormatStyle {
            PenaltyReturnTypeOnItsOwnLine == R.PenaltyReturnTypeOnItsOwnLine &&
            PenaltyBreakTemplateDeclaration ==
                R.PenaltyBreakTemplateDeclaration &&
+           PenaltyBreakMemberAccess == R.PenaltyBreakMemberAccess &&
+           PenaltyBreakLastMemberAccess == R.PenaltyBreakLastMemberAccess &&
            PointerAlignment == R.PointerAlignment &&
            RawStringFormats == R.RawStringFormats &&
            SortJavaStaticImport == R.SortJavaStaticImport &&

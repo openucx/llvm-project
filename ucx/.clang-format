@@ -21,9 +21,9 @@ AllowShortLoopsOnASingleLine: false
 AllowShortEnumsOnASingleLine: false
 AllowDesignatedInitializersOnASingleLine: false
 AlwaysBreakAfterReturnType: None
-PenaltyReturnTypeOnItsOwnLine: 5
-PenaltyBreakAssignment: 200
-PenaltyExcessCharacter: 200
+PenaltyReturnTypeOnItsOwnLine: 100
+PenaltyBreakAssignment: 100
+PenaltyExcessCharacter: 10
 PenaltyBreakBeforeFirstCallParameter: 100
 PenaltyBreakMemberAccess: 250
 PenaltyBreakLastMemberAccess: 300
@@ -34,7 +34,7 @@ BinPackArguments: true
 BinPackParameters: true
 BreakBeforeBraces: Custom
 BraceWrapping:
-  AfterClass: true
+  AfterClass: false
   AfterControlStatement: false
   AfterEnum: false
   AfterFunction: true
@@ -52,7 +52,7 @@ BraceWrapping:
 BreakBeforeBinaryOperators: false
 BreakBeforeTernaryOperators: false
 BreakStringLiterals: true
-ContinuationIndentWidth: 8
+ContinuationIndentWidth: 4
 IncludeBlocks: Regroup
 IndentCaseLabels: false
 IndentWidth: 4

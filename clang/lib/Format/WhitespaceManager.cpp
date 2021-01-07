@@ -13,7 +13,6 @@
 
 #include "WhitespaceManager.h"
 #include "llvm/ADT/STLExtras.h"
-
 #include <fstream>
 
 namespace clang {
@@ -33,17 +32,27 @@ public:
         }
     }
 
-    int Indent(int delta = 0) {
-        return CurrentIndent += delta;
+    int GetIndent() {
+        return CurrentIndent;
+    }
+
+    int Indent() {
+        return CurrentIndent += IndentSize;
+    }
+
+    int Unindent() {
+        return CurrentIndent -= IndentSize;
     }
 
 private:
+    static auto constexpr IndentSize = 2;
+
     Logger() : CurrentIndent(0) {}
 
     friend class LogLine;
     std::string   FileName;
     std::ofstream LogStream;
-    int           CurrentIndent;
+    int           CurrentIndent = 0;
 };
 
 class LogLine {
@@ -51,7 +60,7 @@ public:
     LogLine(const char *File, int Line) : Log(Logger::Get()) {
         if (!Log.FileName.empty()) {
             Log.LogStream << "[CLANG] " << basename(File) << ":" << Line << "   ";
-            for (int i = 0, e = Log.Indent(); i < e; ++i) {
+            for (int i = 0, e = Log.GetIndent(); i < e; ++i) {
                 Log.LogStream << " ";
             }
         }
@@ -78,15 +87,19 @@ private:
 class LogScope {
 public:
     LogScope() {
-        Logger::Get().Indent(2);
+        Logger::Get().Indent();
     }
 
     ~LogScope() {
-        Logger::Get().Indent(-2);
+        Logger::Get().Unindent();
     }
 };
 
 #define LOG LogLine(__FILE__, __LINE__)
+
+#define LOG_BLOCK_START(_STRING) \
+  LOG << "===="; \
+  LOG << _STRING;
 
 
 bool WhitespaceManager::Change::IsBeforeInFile::operator()(
@@ -180,36 +193,28 @@ const tooling::Replacements &WhitespaceManager::generateReplacements() {
       }
   }
 
-  LOG << "====";
-  LOG << "calculateLineBreakInformation";
+  LOG_BLOCK_START("calculateLineBreakInformation");
   calculateLineBreakInformation();
 
-  LOG << "====";
-  LOG << "alignConsecutiveMacros";
+  LOG_BLOCK_START("alignConsecutiveMacros");
   alignConsecutiveMacros();
 
-  LOG << "====";
-  LOG << "alignConsecutiveDeclarations";
+  LOG_BLOCK_START("alignConsecutiveDeclarations");
   alignConsecutiveDeclarations();
 
-  LOG << "====";
-  LOG << "alignConsecutiveBitFields";
+  LOG_BLOCK_START("alignConsecutiveBitFields");
   alignConsecutiveBitFields();
 
-  LOG << "====";
-  LOG << "alignConsecutiveAssignments";
+  LOG_BLOCK_START("alignConsecutiveAssignments");
   alignConsecutiveAssignments();
 
-  LOG << "====";
   LOG << "alignChainedConditionals";
   alignChainedConditionals();
 
-  LOG << "====";
-  LOG << "alignTrailingComments";
+  LOG_BLOCK_START("alignTrailingComments");
   alignTrailingComments();
 
-  LOG << "====";
-  LOG << "alignEscapedNewlines";
+  LOG_BLOCK_START("alignEscapedNewlines");
   alignEscapedNewlines();
 
   generateChanges();
