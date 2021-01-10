@@ -23,7 +23,7 @@ AllowDesignatedInitializersOnASingleLine: false
 AlwaysBreakAfterReturnType: None
 PenaltyReturnTypeOnItsOwnLine: 100
 PenaltyBreakAssignment: 100
-PenaltyExcessCharacter: 10
+PenaltyExcessCharacter: 100
 PenaltyBreakBeforeFirstCallParameter: 100
 PenaltyBreakMemberAccess: 250
 PenaltyBreakLastMemberAccess: 300
@@ -52,7 +52,7 @@ BraceWrapping:
 BreakBeforeBinaryOperators: false
 BreakBeforeTernaryOperators: false
 BreakStringLiterals: true
-ContinuationIndentWidth: 4
+ContinuationIndentWidth: 8
 IncludeBlocks: Regroup
 IndentCaseLabels: false
 IndentWidth: 4
