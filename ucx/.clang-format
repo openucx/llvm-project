@@ -21,9 +21,9 @@ AllowShortLoopsOnASingleLine: false
 AllowShortEnumsOnASingleLine: false
 AllowDesignatedInitializersOnASingleLine: false
 AlwaysBreakAfterReturnType: None
-PenaltyReturnTypeOnItsOwnLine: 100
+PenaltyReturnTypeOnItsOwnLine: 20
 PenaltyBreakAssignment: 100
-PenaltyExcessCharacter: 10
+PenaltyExcessCharacter: 100
 PenaltyBreakBeforeFirstCallParameter: 100
 PenaltyBreakMemberAccess: 250
 PenaltyBreakLastMemberAccess: 300
@@ -52,7 +52,7 @@ BraceWrapping:
 BreakBeforeBinaryOperators: false
 BreakBeforeTernaryOperators: false
 BreakStringLiterals: true
-ContinuationIndentWidth: 4
+ContinuationIndentWidth: 8
 IncludeBlocks: Regroup
 IndentCaseLabels: false
 IndentWidth: 4
@@ -98,7 +98,6 @@ ForEachMacros: ['FOR_EACH_ENTITY',
                 'UCX_PERF_TEST_FOREACH']
 StatementMacros : []
 TypenameMacros: ['khash_t']
-WhitespaceSensitiveMacros: []
 WhitespaceSensitiveMacros: [] 
 
 # CPP
