@@ -1087,7 +1087,9 @@ private:
       parseTemplateDeclaration();
       break;
     case tok::comma:
-      if (Contexts.back().InCtorInitializer)
+      if (Contexts.back().InStructInitializer)
+        Tok->setType(TT_StructInitializerComma);
+      else if (Contexts.back().InCtorInitializer)
         Tok->setType(TT_CtorInitializerComma);
       else if (Contexts.back().InInheritanceList)
         Tok->setType(TT_InheritanceComma);
@@ -1407,6 +1409,7 @@ private:
     bool CanBeExpression = true;
     bool InTemplateArgument = false;
     bool InCtorInitializer = false;
+    bool InStructInitializer = false;
     bool InInheritanceList = false;
     bool CaretFound = false;
     bool IsForEachMacro = false;
@@ -1472,6 +1475,9 @@ private:
                Current.Previous->is(TT_CtorInitializerColon)) {
       Contexts.back().IsExpression = true;
       Contexts.back().InCtorInitializer = true;
+    } else if (Current.Previous &&
+               Current.Previous->is(TT_DesignatedInitializerPeriod)) {
+      Contexts.back().InStructInitializer = true;
     } else if (Current.Previous && Current.Previous->is(TT_InheritanceColon)) {
       Contexts.back().InInheritanceList = true;
     } else if (Current.isOneOf(tok::r_paren, tok::greater, tok::comma)) {
@@ -2688,8 +2694,8 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     //   aaaaaaa
     //       .aaaaaaaaa.bbbbbbbb(cccccccc);
     return !Right.NextOperator || !Right.NextOperator->Previous->closesScope()
-               ? 150
-               : 35;
+               ? Style.PenaltyBreakLastMemberAccess
+               : Style.PenaltyBreakMemberAccess;
   }
 
   if (Right.is(TT_TrailingAnnotation) &&
@@ -2887,6 +2893,15 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
          Style.SpaceAroundPointerQualifiers == FormatStyle::SAPQ_Both) &&
         (Left.is(TT_AttributeParen) || Left.canBePointerOrReferenceQualifier()))
       return true;
+    // Don't add space if the next token closes a scope
+    if (Style.PointerAlignment != FormatStyle::PAS_Left) {
+      FormatToken *NextToken = Right.Next;
+      while (NextToken != NULL && NextToken->is(TT_PointerOrReference))
+        NextToken = NextToken->Next;
+      if (NextToken == NULL || NextToken->closesScope() ||
+          NextToken->isOneOf(tok::comma, tok::semi))
+        return false;
+    }
     return (Left.Tok.isLiteral() ||
             (!Left.isOneOf(TT_PointerOrReference, tok::l_paren) &&
              (Style.PointerAlignment != FormatStyle::PAS_Left ||
@@ -3637,13 +3652,19 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
   if ((Right.Previous->is(tok::l_brace) ||
        (Right.Previous->is(tok::less) && Right.Previous->Previous &&
         Right.Previous->Previous->is(tok::equal))) &&
-      Right.NestingLevel == 1 && Style.Language == FormatStyle::LK_Proto) {
+      Right.NestingLevel == 1 &&
+      (Style.Language == FormatStyle::LK_Proto ||
+       (Right.is(TT_DesignatedInitializerPeriod) &&
+        !Style.AllowDesignatedInitializersOnASingleLine))) {
     // Don't put enums or option definitions onto single lines in protocol
     // buffers.
     return true;
   }
   if (Right.is(TT_InlineASMBrace))
     return Right.HasUnescapedNewline;
+
+  if (Left.is(TT_StructInitializerComma))
+    return !Style.AllowDesignatedInitializersOnASingleLine;
 
   auto ShortLambdaOption = Style.AllowShortLambdasOnASingleLine;
   if (Style.BraceWrapping.BeforeLambdaBody &&

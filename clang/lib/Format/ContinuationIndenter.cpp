@@ -376,6 +376,8 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
   if (((Previous.is(TT_DictLiteral) && Previous.is(tok::l_brace)) ||
        (Previous.is(TT_ArrayInitializerLSquare) &&
         Previous.ParameterCount > 1) ||
+       (Current.is(TT_DesignatedInitializerLSquare) &&
+        Previous.is(tok::l_brace) && Style.Cpp11BracedListLineBreak) ||
        opensProtoMessageField(Previous, Style)) &&
       Style.ColumnLimit > 0 &&
       getLengthToMatchingParen(Previous, State.Stack) + State.Column - 1 >

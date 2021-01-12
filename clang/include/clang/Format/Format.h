@@ -158,10 +158,20 @@ struct FormatStyle {
     /// \code
     ///   #define A \
     ///     int aaaa; \
+    ///   \
     ///     int b; \
     ///     int dddddddddd;
     /// \endcode
     ENAS_DontAlign,
+    /// Indent escaped newlines.
+    /// \code
+    ///   #define A \
+    ///     int aaaa; \
+    ///     \
+    ///     int b; \
+    ///     int dddddddddd;
+    /// \endcode
+    ENAS_Indent,
     /// Align escaped newlines as far left as possible.
     /// \code
     ///   true:
@@ -294,6 +304,19 @@ struct FormatStyle {
   ///   } myEnum;
   /// \endcode
   bool AllowShortEnumsOnASingleLine;
+
+  /// Allow short structs on a single line.
+  /// \code
+  ///   true:
+  ///   struct S _s = { A, B };
+  ///
+  ///   false:
+  ///   struct S _s = {
+  ///     .a = A,
+  ///     .b = B
+  ///   };
+  /// \endcode
+  bool AllowDesignatedInitializersOnASingleLine;
 
   /// Different styles for merging short blocks containing at most one
   /// statement.
@@ -1385,6 +1408,21 @@ struct FormatStyle {
   /// \endcode
   bool Cpp11BracedListStyle;
 
+  /// If true, adds line break after C++11 braced lists.
+  /// \code
+  ///   false:
+  ///   struct A a_var = {
+  ///       AAAAAAAA,
+  ///       BBBBBBBB};
+  ///
+  ///   false:
+  ///   struct A a_var = {
+  ///       AAAAAAAA,
+  ///       BBBBBBBB
+  //    };
+  /// \endcode
+  bool Cpp11BracedListLineBreak;
+
   /// \brief Analyze the formatted file for the most used line ending (``\r\n``
   /// or ``\n``). ``UseCRLF`` is only used as a fallback if none can be derived.
   bool DeriveLineEnding;
@@ -1964,6 +2002,12 @@ struct FormatStyle {
   /// line.
   unsigned PenaltyReturnTypeOnItsOwnLine;
 
+  /// Penalty for breaking after ./->
+  unsigned PenaltyBreakMemberAccess;
+
+  /// Penalty for breaking after last ./-> in a sequence of member accesses
+  unsigned PenaltyBreakLastMemberAccess;
+
   /// Penalty for each character of whitespace indentation
   /// (counted relative to leading non-whitespace column).
   unsigned PenaltyIndentedWhitespace;
@@ -2452,6 +2496,9 @@ struct FormatStyle {
   /// The way to use tab characters in the resulting file.
   UseTabStyle UseTab;
 
+  /// Dump formatter log to this file
+  std::string LogFile;
+
   bool operator==(const FormatStyle &R) const {
     return AccessModifierOffset == R.AccessModifierOffset &&
            AlignAfterOpenBracket == R.AlignAfterOpenBracket &&
@@ -2469,6 +2516,7 @@ struct FormatStyle {
            AllowAllParametersOfDeclarationOnNextLine ==
                R.AllowAllParametersOfDeclarationOnNextLine &&
            AllowShortEnumsOnASingleLine == R.AllowShortEnumsOnASingleLine &&
+           AllowDesignatedInitializersOnASingleLine == R.AllowDesignatedInitializersOnASingleLine &&
            AllowShortBlocksOnASingleLine == R.AllowShortBlocksOnASingleLine &&
            AllowShortCaseLabelsOnASingleLine ==
                R.AllowShortCaseLabelsOnASingleLine &&
@@ -2502,6 +2550,7 @@ struct FormatStyle {
                R.ConstructorInitializerIndentWidth &&
            ContinuationIndentWidth == R.ContinuationIndentWidth &&
            Cpp11BracedListStyle == R.Cpp11BracedListStyle &&
+           Cpp11BracedListLineBreak == R.Cpp11BracedListLineBreak &&
            DeriveLineEnding == R.DeriveLineEnding &&
            DerivePointerAlignment == R.DerivePointerAlignment &&
            DisableFormat == R.DisableFormat &&
@@ -2549,6 +2598,8 @@ struct FormatStyle {
            PenaltyReturnTypeOnItsOwnLine == R.PenaltyReturnTypeOnItsOwnLine &&
            PenaltyBreakTemplateDeclaration ==
                R.PenaltyBreakTemplateDeclaration &&
+           PenaltyBreakMemberAccess == R.PenaltyBreakMemberAccess &&
+           PenaltyBreakLastMemberAccess == R.PenaltyBreakLastMemberAccess &&
            PointerAlignment == R.PointerAlignment &&
            RawStringFormats == R.RawStringFormats &&
            SortJavaStaticImport == R.SortJavaStaticImport &&
@@ -2577,7 +2628,8 @@ struct FormatStyle {
            BitFieldColonSpacing == R.BitFieldColonSpacing &&
            Standard == R.Standard && TabWidth == R.TabWidth &&
            StatementMacros == R.StatementMacros && UseTab == R.UseTab &&
-           UseCRLF == R.UseCRLF && TypenameMacros == R.TypenameMacros;
+           UseCRLF == R.UseCRLF && TypenameMacros == R.TypenameMacros &&
+           LogFile == R.LogFile;
   }
 
   llvm::Optional<FormatStyle> GetLanguageStyle(LanguageKind Language) const;

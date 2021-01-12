@@ -2455,7 +2455,7 @@ bool UnwrappedLineParser::parseEnum() {
     return true;
   }
 
-  if (!Style.AllowShortEnumsOnASingleLine)
+  if (!Style.AllowShortEnumsOnASingleLine && Style.BraceWrapping.AfterEnum)
     addUnwrappedLine();
   // Parse enum body.
   nextToken();
